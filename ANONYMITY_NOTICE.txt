@@ -1,0 +1,5 @@
+Certain files may contain in the copyright notices the names of the authors of previously published work or open source software. Please note that we have removed our names in all such notices, and replaced them with:
+
+"authors of the anonymous ACMTOG submission 'Surface Reconstruction from Point Clouds without Normals by Parametrizing the Gauss Formula'"
+
+to keep the anonymity.

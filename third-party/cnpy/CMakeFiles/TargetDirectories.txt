@@ -1,0 +1,9 @@
+/home/whc/ParametricGaussRecon/third-party/cnpy/CMakeFiles/cnpy.dir
+/home/whc/ParametricGaussRecon/third-party/cnpy/CMakeFiles/cnpy-static.dir
+/home/whc/ParametricGaussRecon/third-party/cnpy/CMakeFiles/example1.dir
+/home/whc/ParametricGaussRecon/third-party/cnpy/CMakeFiles/edit_cache.dir
+/home/whc/ParametricGaussRecon/third-party/cnpy/CMakeFiles/rebuild_cache.dir
+/home/whc/ParametricGaussRecon/third-party/cnpy/CMakeFiles/list_install_components.dir
+/home/whc/ParametricGaussRecon/third-party/cnpy/CMakeFiles/install.dir
+/home/whc/ParametricGaussRecon/third-party/cnpy/CMakeFiles/install/local.dir
+/home/whc/ParametricGaussRecon/third-party/cnpy/CMakeFiles/install/strip.dir

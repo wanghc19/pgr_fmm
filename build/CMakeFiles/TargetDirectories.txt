@@ -1,0 +1,4 @@
+/home/whc/ParametricGaussRecon/build/CMakeFiles/PGRExportQuery.dir
+/home/whc/ParametricGaussRecon/build/CMakeFiles/PGRLoadQuery.dir
+/home/whc/ParametricGaussRecon/build/CMakeFiles/edit_cache.dir
+/home/whc/ParametricGaussRecon/build/CMakeFiles/rebuild_cache.dir

@@ -1,0 +1,2 @@
+g++ -O2 src/PGRExportQuery.cpp src/Cube.cpp src/Geometry.cpp src/MarchingCubes.cpp src/Mesh.cpp src/Octnode.cpp src/Octree.cpp src/ply.cpp src/plyfile.cpp -Ithird-party/CLI -Ithird-party/cnpy -Lthird-party/cnpy -o apps/PGRExportQuery -lcnpy
+g++ -O2 src/PGRLoadQuery.cpp src/Cube.cpp src/Geometry.cpp src/MarchingCubes.cpp src/Mesh.cpp src/Octnode.cpp src/Octree.cpp src/ply.cpp src/plyfile.cpp -Ithird-party/CLI -Ithird-party/cnpy -Lthird-party/cnpy -o apps/PGRLoadQuery -lcnpy
