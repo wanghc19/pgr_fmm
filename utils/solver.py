@@ -29,6 +29,8 @@ from tqdm import tqdm
 from scipy.spatial import KDTree
 from time import time
 import math
+#import fmm3dpy as fmm
+from . import lfmm3d_fortran as lfmm
 
 def mul_A_T(x, y, xi, x_width, chunk_size, dtype):
 
@@ -162,6 +164,8 @@ def solve(x, y, x_width, chunk_size, dtype, iso_value, r_sq_stop_eps, alpha, max
     B = get_B(x, y, chunk_size, x_width, alpha)
     TIME_END_COMPUTE_B = time()
     print('\033[94m' + f'[Timer] B computed in {TIME_END_COMPUTE_B-TIME_START_COMPUTE_B}' + '\033[0m')
+    # cnp.save("B", B)
+    # B = cnp.load("B.npy")
 
     if cnp != np:
         cnp._default_memory_pool.free_all_blocks()
@@ -177,8 +181,14 @@ def solve(x, y, x_width, chunk_size, dtype, iso_value, r_sq_stop_eps, alpha, max
     TIME_START_CG = time()
     solve_progress_bar = tqdm(range(max_iters))
     k = -1 # to prevent error message when max_iters == 0
+
+    # a = alpha - 1 # `alpha` will be replaced in the following cycle
+    # xT = x.T  # fmm argument requires [3, Nx] array
     for k in solve_progress_bar:
         Bp = cnp.matmul(B, p)
+        # _, A_Tp, _ = lfmm.lfmm3d_s_c_g(r_sq_stop_eps, xT, p)  # not compute $\Delta A$ yet
+        # Bp, _ = lfmm.lfmm3d_s_d_p(r_sq_stop_eps, xT, A_Tp) 
+        # Bp += a * p   # this is the diagonal term $(\alpha - 1) * I * p$, not compute $diag(AA^T)$ yet
         r_sq = cnp.einsum('i,i', r, r)
 
         alpha = r_sq / cnp.einsum('i,i', p, Bp)
