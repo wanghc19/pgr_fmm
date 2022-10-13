@@ -31,6 +31,8 @@ from time import time
 import math
 #import fmm3dpy as fmm
 from . import lfmm3d_fortran as lfmm
+from scipy.sparse import dok_matrix
+from scipy.sparse import csr_matrix
 
 def mul_A_T(x, y, xi, x_width, chunk_size, dtype):
 
@@ -138,7 +140,7 @@ def get_B(x, y, chunk_size, x_width, alpha):
 
 
 
-def solve(x, y, x_width, chunk_size, dtype, iso_value, r_sq_stop_eps, alpha, max_iters, save_r):
+def solve(x, y, x_width, chunk_size, dtype, iso_value, r_sq_stop_eps, alpha, max_iters, save_r, wk, base_kdtree=None):
     """
     x: numpy array of shape [N_query, 3]
     y: numpy array of shape [N_sample, 3]
@@ -152,18 +154,18 @@ def solve(x, y, x_width, chunk_size, dtype, iso_value, r_sq_stop_eps, alpha, max
         import cupy as cnp    
 
     N_query = x.shape[0]
-    N_sample = y.shape[1]
+    N_sample = y.shape[0]
 
     if max_iters is None:
         max_iters = y.shape[0]
     else:
         max_iters = min(max_iters, y.shape[0])
 
-    print(f'[In solver] Precomputing B...')
-    TIME_START_COMPUTE_B = time()
-    B = get_B(x, y, chunk_size, x_width, alpha)
-    TIME_END_COMPUTE_B = time()
-    print('\033[94m' + f'[Timer] B computed in {TIME_END_COMPUTE_B-TIME_START_COMPUTE_B}' + '\033[0m')
+    # print(f'[In solver] Precomputing B...')
+    # TIME_START_COMPUTE_B = time()
+    # B = get_B(x, y, chunk_size, x_width, alpha)
+    # TIME_END_COMPUTE_B = time()
+    # print('\033[94m' + f'[Timer] B computed in {TIME_END_COMPUTE_B-TIME_START_COMPUTE_B}' + '\033[0m')
     # cnp.save("B", B)
     # B = cnp.load("B.npy")
 
@@ -177,18 +179,51 @@ def solve(x, y, x_width, chunk_size, dtype, iso_value, r_sq_stop_eps, alpha, max
     if save_r:
         r_list = []
 
+    print('[In solver] Computing Delta A...')
+    TIME_START_DELTA_A = time()
+    Delta_A = get_Delta_A(x, x_width, wk, base_kdtree, dtype)
+    Delta_A_T = Delta_A.transpose()
+    TIME_END_DELTA_A = time()
+    print('\033[94m' + f'[Timer] Delta A computed in {TIME_END_DELTA_A-TIME_START_DELTA_A}' + '\033[0m')
+
+
     print('[In solver] Starting CG iterations...')
     TIME_START_CG = time()
     solve_progress_bar = tqdm(range(max_iters))
     k = -1 # to prevent error message when max_iters == 0
 
-    # a = alpha - 1 # `alpha` will be replaced in the following cycle
-    # xT = x.T  # fmm argument requires [3, Nx] array
+    a = alpha - 1 # `alpha` will be replaced in the following cycle
+    C = csr_matrix((N_query, N_query), dtype=dtype) # diagonal term
+    C.eliminate_zeros()
+    C = C.todok()
+    for i in range(N_query):
+        # C[i, i] = B[i, i]
+        C[i, i] = 1
+    del B
+    xT = x.T  # fmm argument requires [3, Nx] array
+    yT = y.T  # fmm argument requires [3, Ny] array
+
     for k in solve_progress_bar:
-        Bp = cnp.matmul(B, p)
-        # _, A_Tp, _ = lfmm.lfmm3d_s_c_g(r_sq_stop_eps, xT, p)  # not compute $\Delta A$ yet
-        # Bp, _ = lfmm.lfmm3d_s_d_p(r_sq_stop_eps, xT, A_Tp) 
-        # Bp += a * p   # this is the diagonal term $(\alpha - 1) * I * p$, not compute $diag(AA^T)$ yet
+        # Bp = cnp.matmul(B, p)
+
+        '''
+        _, q, _ = lfmm.lfmm3d_t_c_g(r_sq_stop_eps, yT, p, xT)  # not compute $\Delta A$ yet, $q = A_0p$
+        q = q / 4 / cnp.pi
+        q += (Delta_A_T.dot(p)).reshape((3, N_sample))  # add $Delta A^T p$ and reshape it to the form which fmm requires
+        Bp, _ = lfmm.lfmm3d_t_d_p(r_sq_stop_eps, yT, q, xT) 
+        Bp = Bp / 4 / cnp.pi
+        Bp -= Delta_A.dot(q.flatten())   # add $\Delta A q$
+        Bp += a * C.dot(p)   # this is the diagonal term $(\alpha - 1) * I * p$, not compute $diag(AA^T)$ yet
+        '''
+
+        _, q, _ = lfmm.lfmm3d_s_c_g(r_sq_stop_eps, xT, p) 
+        q = q / 4 / cnp.pi
+        q += (Delta_A_T.dot(p)).reshape((3, N_sample))  # add $Delta A^T p$ and reshape it to the form which fmm requires
+        Bp, _ = lfmm.lfmm3d_s_d_p(r_sq_stop_eps, xT, q) 
+        Bp = Bp / 4 / cnp.pi
+        Bp += Delta_A.dot(q.flatten())   # add $\Delta A q$
+        Bp += a * C.dot(p)   # this is the diagonal term $(\alpha - 1) * I * p$
+
         r_sq = cnp.einsum('i,i', r, r)
 
         alpha = r_sq / cnp.einsum('i,i', p, Bp)
@@ -280,3 +315,30 @@ def get_width(query_set, k, dtype, width_min, width_max, base_set=None, base_kdt
     else:
         del base_kdtree
         return x_width
+
+
+def get_Delta_A(x, x_width, wk, base_kdtree, dtype):
+    '''
+    x: Query set
+    x_width: 
+    wk: k in knn for width estimation
+    '''
+    N_query = x.shape[0]
+    N_sample = N_query
+    delta_A_bar = tqdm(range(N_query))
+    x_knn_dist, x_knn_idx = base_kdtree.query(x, k=wk+1)
+    Delta_A = csr_matrix((N_query, 3 * N_sample), dtype=dtype)
+    Delta_A.eliminate_zeros()
+    Delta_A = Delta_A.todok()
+    for k in delta_A_bar:
+        for j in range(wk):
+            if x_knn_dist[k, j] >= x_width[k]:
+                break
+            else:
+                dist = x_knn_dist[k, j]
+                if x_knn_idx[k, j] != k:
+                    x1 = x[x_knn_idx[k, j], :]
+                    Delta_A[k, x_knn_idx[k, j]] = (x[k, 0] - x1[0]) / 4 / np.pi * (dist ** (-3) - x_width[k] ** (-3))
+                    Delta_A[k, x_knn_idx[k, j] + N_sample] = (x[k, 1] - x1[1]) / 4 / np.pi * (dist ** (-3) - x_width[k] ** (-3))
+                    Delta_A[k, x_knn_idx[k, j] + N_sample * 2] = (x[k, 2] - x1[2]) / 4 / np.pi * (dist ** (-3) - x_width[k] ** (-3))
+    return Delta_A

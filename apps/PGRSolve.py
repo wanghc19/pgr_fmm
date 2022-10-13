@@ -33,7 +33,7 @@ from utils.io import load_sample_from_npy
 
 CHUNK_SIZE = 512
 FLT_TYPE = np.float32
-R_SQ_STOP_EPS = 1e-20
+R_SQ_STOP_EPS = 1e-5
 TARGET_ISO_VALUE = -0.5     # this is compatible with the MC orientation
 
 parser = argparse.ArgumentParser()
@@ -99,7 +99,9 @@ if __name__ == '__main__':
                    r_sq_stop_eps=R_SQ_STOP_EPS,
                    alpha=args.alpha,
                    max_iters=args.max_iters,
-                   save_r=args.save_r)
+                   save_r=args.save_r,
+                   wk=args.width_k,
+                   base_kdtree=base_kdtree)
     if args.save_r:
         lse, r_list = solved
         out_r_list_txt = out_prefix + 'residuals.csv'
@@ -154,7 +156,8 @@ if __name__ == '__main__':
         
     CHUNK_SIZE = 1024
     if args.cpu:
-        CHUNK_SIZE = 16384
+        # CHUNK_SIZE = 16384
+        CHUNK_SIZE = 1024   # CHUNK_SIZE = 16384 will cause OUT_OF_MEMORY
     query_vals = get_query_vals(q_query, q_width, y_base, lse, CHUNK_SIZE)
     
     out_grid_width_npy = out_prefix + 'grid_width'
